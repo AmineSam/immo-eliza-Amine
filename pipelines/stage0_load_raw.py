@@ -35,7 +35,6 @@ def load_raw_dataset(path: str | None = None) -> pd.DataFrame:
     if "price" in df.columns:
         df["price"] = pd.to_numeric(df["price"], errors="coerce")
 
-
     # 5. Minimal schema check
     missing = [c for c in EXPECTED_MIN_COLUMNS if c not in df.columns]
     if missing:

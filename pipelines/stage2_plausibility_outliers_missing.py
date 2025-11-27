@@ -18,7 +18,6 @@ COLS_TO_DROP = [
     "availability",
 ]
 
-# Binary columns encoded as {1, 0, -1} (missing = -1)
 BINARY_COLS = [
     "cellar", "sewer_connection", "has_swimming_pool",
     "preemption_right", "access_disabled", "running_water",
@@ -104,31 +103,31 @@ FLOODING_MAPPING = {
 PLAUSIBLE_RANGES = {
     # Core information
     "price": (25_000, 5_000_000),                   # realistic price cap 
-    "rooms": (0, 15),
+    "rooms": (-1, 15),
 
     # Surface values
     "area": (15, 1000),                              # 
-    "kitchen_surface_house": (0, 200),
-    "living_room_surface": (0, 300),
-    "land_surface_house": (0, 30_000),              # rare farms can reach 30k m²
+    "kitchen_surface_house": (-1, 200),
+    "living_room_surface": (-1, 300),
+    "land_surface_house": (-1, 30_000),              # rare farms can reach 30k m²
 
     # Bathrooms / toilets
-    "bathrooms": (0, 10),
-    "toilets": (0, 12),
+    "bathrooms": (-1, 10),
+    "toilets": (-1, 10),
 
     # Apartment floor + building floors
     "apartement_floor_apartment": (-1, 50),         # max 50 floors (Belgium < 45)
     "number_floors_apartment": (-1, 50),            # cap to 50 (max in Belgium ≈ 45)
 
     # Apartment surfaces
-    "terrace_surface_apartment": (0, 200),
+    "terrace_surface_apartment": (-1, 200),
 
     # Census / Cadaster
     "cadastral_income_house": (-1, 10_000),         # abnormal values >190k exist → cap at 10k
 
     # Energy / CO2
-    "primary_energy_consumption": (0, 2_000),
-    "co2_house": (0, 1_000),                        # after your describe, this is the safe cap
+    "primary_energy_consumption": (-1, 2_000),
+    "co2_house": (-1, 1_000),                        # after your describe, this is the safe cap
 
     # Facades (rare but important)
     "facades_number": (-1, 4),                      # 0–4 are realistic
@@ -147,7 +146,7 @@ HOUSE_SUBTYPE_MAP = {
     "master house": "house",
 }
 # Subtypes to drop entirely
-SUBTYPES_TO_DROP = ["mixed building", "mansion"]
+SUBTYPES_TO_DROP = ["mixed building"]
 
 
 # =========================================================
@@ -458,11 +457,11 @@ def stage2_pipeline(df_clean: pd.DataFrame):
     # 7) Normalize / filter property_subtype
     df = normalize_property_subtype(df)
 
-    # 8) APPLY CAPPING HERE
-    df = cap_values(df, PLAUSIBLE_RANGES)
-    df = df[df["price"] >= 25000]
+
     # 9) Flag unusual values & split outliers
     df_flagged = flag_unusual_values(df)
+    # 8) APPLY CAPPING HERE
+    df = cap_values(df, PLAUSIBLE_RANGES)
     df_stage2, df_outliers = split_outliers(df_flagged)
 
     return df_stage2, df_outliers

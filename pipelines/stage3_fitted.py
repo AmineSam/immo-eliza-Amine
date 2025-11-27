@@ -45,7 +45,13 @@ class Stage3Fitter:
         return [
             "area", "rooms", "living_room_surface", "build_year",
             "facades_number", "bathrooms", "toilets",
-            "cadastral_income_house", "area_log",
+            "cadastral_income_house","median_income", 
+            'apt_avg_m2_province',
+            'house_avg_m2_province', 'apt_avg_m2_region', 'house_avg_m2_region',
+            'province_benchmark_m2', 'region_benchmark_m2', 'national_benchmark_m2',
+            'diff_to_province_avg_m2', 'ratio_to_province_avg_m2',
+            'diff_to_region_avg_m2', 'ratio_to_region_avg_m2',
+            'diff_to_national_avg_m2', 'ratio_to_national_avg_m2',
         ]
 
     @staticmethod
@@ -63,7 +69,7 @@ class Stage3Fitter:
             "heating_type", "glazing_type",
             "sewer_connection", "certification_electrical_installation",
             "preemption_right", "flooding_area_type",
-            "attic_house", "state",
+            "attic_house", "state",  'region', 'province',
         ]
 
     # ---------------------------------------------------------
@@ -109,11 +115,14 @@ class Stage3Fitter:
     # FIT GEO
     # ---------------------------------------------------------
     def _fit_geo(self, df: pd.DataFrame):
-        self.postal_price_mean_ = df.groupby("postal_code")["price"].mean().to_dict()
+        #self.postal_price_mean_ = df.groupby("postal_code")["price"].mean().to_dict()
         self.postal_ppm2_mean_ = df.groupby("postal_code")["price_per_m2"].mean().to_dict()
 
-        self.locality_price_mean_ = df.groupby("locality")["price"].mean().to_dict()
+        #self.locality_price_mean_ = df.groupby("locality")["price"].mean().to_dict()
         self.locality_ppm2_mean_ = df.groupby("locality")["price_per_m2"].mean().to_dict()
+
+        self.municipality_ppm2_mean_ = df.groupby("municipality_nl")["price_per_m2"].mean().to_dict()
+        self.arrondissement_ppm2_mean_ = df.groupby("arrondissement_nl")["price_per_m2"].mean().to_dict()
 
     # ---------------------------------------------------------
     # APPLY GEO (train-fitted)
@@ -121,12 +130,14 @@ class Stage3Fitter:
     def _apply_geo(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
 
-        df["postal_price_mean"] = df["postal_code"].map(self.postal_price_mean_)
+        #df["postal_price_mean"] = df["postal_code"].map(self.postal_price_mean_)
         df["postal_price_per_m2_mean"] = df["postal_code"].map(self.postal_ppm2_mean_)
 
-        df["locality_price_mean"] = df["locality"].map(self.locality_price_mean_)
+        #df["locality_price_mean"] = df["locality"].map(self.locality_price_mean_)
         df["locality_price_per_m2_mean"] = df["locality"].map(self.locality_ppm2_mean_)
 
+        df["municipality_price_per_m2_mean"] = df["municipality_nl"].map(self.municipality_ppm2_mean_)
+        df["arrondissement_price_per_m2_mean"] = df["arrondissement_nl"].map(self.arrondissement_ppm2_mean_)
         return df
 
     # ---------------------------------------------------------
