@@ -1,4 +1,4 @@
-# Immo-Eliza — Advanced Real-Estate Data Pipeline (Belgium)
+# Immo-Eliza — Real-Estate Price Predictor (Belgium)
 
 ## 1. Project Overview
 
@@ -12,7 +12,7 @@ The dataset is enriched with:
 - Local price aggregates (postal, locality)  
 - Advanced engineered ML features (missingness flags, log transforms, smoothed target encoding)
 
-The pipeline is designed to be **modular, reproducible, and model-agnostic**, allowing training of models such as Linear Regression, Random Forest, and XGBoost.
+The pipeline is designed to be **modular, reproducible**, allowing training of models such as Linear Regression, Random Forest, and XGBoost.
 
 ---
 
@@ -79,6 +79,10 @@ Stage 0 → Stage 1 → Stage 2 → Stage 2.5 → Stratified Split → Stage 3 (
 
 ### 4.3 Stage 2 — Plausibility Checks, Encoding, Outlier Removal
 
+Stage 2 applies domain-driven cleaning rules to guarantee data consistency without introducing leakage.
+
+All plausibility thresholds (price, area, rooms, EPC, surfaces, floors, CO₂, cadastral income, etc.) were defined exclusively using domain expertise and real-estate knowledge, not statistical summaries computed from the dataset.
+This ensures the entire process remains leakage-free, since no information from validation or test distributions is used during cleaning.
 - Drop sparse/noisy columns  
 - Encode categorical & binary fields  
 - Replace missing numeric with -1  
@@ -90,7 +94,7 @@ Stage 0 → Stage 1 → Stage 2 → Stage 2.5 → Stratified Split → Stage 3 (
 Adds:
 
 - Municipality, arrondissement, province, region  
-- Median municipal income  
+- Median municipal income from external datasets
 - Address table  
 - Provincial, regional, national benchmark prices  
 - Engineered benchmark features  
@@ -131,27 +135,21 @@ Adds:
 ## 6. Model Performance Summary
 
 **Linear Regression**  
-- R²: 0.58–0.60  
-- Underfits  
+- R²: 0.58–0.60 
+- MAE: 86k-90k 
+- Underfits slightly  
 
-**Random Forest (Best)**  
-- R²: 0.72–0.76  
-- MAE ~54k–62k  
+**Random Forest**  
+- R²: 0.75–0.78  
+- MAE ~51k–53k  
 
-**XGBoost**  
-- Similar R², slightly higher MAE  
-
----
-
-## 7. Why No Leakage Occurs
-
-- All encoders, imputers, geofeatures fitted **only on train**  
-- Validation/Test never influence feature engineering  
-- Benchmarks and external merges contain no target info  
+**XGBoost (Best), light tuning and 5-cross validation**  
+- R²: 0.8474 ± 0.0230 
+- MAE: 45.2k ± 1405
 
 ---
 
-## 8. Running the Pipeline
+## 7. Running the Pipeline
 
 ```bash
 python -m venv .venv
@@ -164,18 +162,58 @@ from pipelines.pipeline_runner import run_full_pipeline_with_split
 run_full_pipeline_with_split()
 ```
 
+```python
+jupyter notebook notebooks/analysis.ipynb
+```
+
 ---
 
-## 9. Future Improvements
+## 8. XGBoost Tuning & Cross-Validation
 
-- OSM distance-based features  
+XGBoost was tuned using a focused grid search with **3-fold cross-validation** to balance training time and generalization.  
+Only the most impactful hyperparameters were explored (e.g., `learning_rate`, `max_depth`, `n_estimators`, `subsample`, `colsample_bytree`).
+
+This approach allowed the model to:
+- Reduce overfitting  
+- Stabilize performance across splits  
+- Improve MAE and R² compared to untuned XGBoost  
+
+The tuning was fully **leakage-safe**, applied only on the training split after Stage 3 feature engineering.
+
+Best Hyperparameters:
+
+- model__colsample_bytree: 0.8
+- model__learning_rate: 0.05
+- model__max_depth: 10
+- model__n_estimators: 500
+- model__subsample: 0.8
+
+![alt text](image.png)
+
+## 9. SHAP Feature Interpretation
+
+SHAP (Shapley Values) was used to interpret model predictions and understand which engineered features contributed most to price estimation.
+
+Key insights:
+- Area, bathrooms, geo-aggregates, and benchmark ratios were strong positive contributors.
+- Missingness flags, poor property state, and low regional ratios often pushed predictions down.
+- Geo-features from Stage 2.5 were highly influential, confirming the strength of the enrichment step.
+
+SHAP summary and bar plots provided a clear global view of feature importance without introducing any leakage.
+
+![alt text](image-1.png)
+
+## 10. Future Improvements
+
+- OSM distance-based features (distance to nearest facility)  
 - Nearest-neighbor comparable prices  
 - Micro-market clustering  
 - CatBoost / LightGBM  
-- Optuna tuning  
-
+- Optuna tuning 
+- Specialized models for luxuary vs luxuary
+- Specialized models for apartment vs house
+- Robust tuning of the ensemble models
 ---
 
-## 10. License
-
-MIT (recommended)
+### 9. Contributors
+- [Amine Samoudi](https://github.com/AmineSam)
