@@ -41,9 +41,9 @@ def prepare_X_y(df: pd.DataFrame, model_type: str = "linear"):
 
     # 3) Remove leakage features
     #    Anything directly derived from price
-    leakage_cols = []
-    leakage_cols += [c for c in X.columns if c.startswith("price_per_m2")]
-    leakage_cols += ["price_log"]
+    leakage_cols = ["price_log"]
+    # Also drop any remaining diff_to_* or ratio_to_* if they exist
+    leakage_cols += [c for c in X.columns if c.startswith("diff_to_") or c.startswith("ratio_to_")]
     X = X.drop(columns=leakage_cols, errors="ignore")
 
     # 4) Model-type specific filtering

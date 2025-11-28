@@ -79,14 +79,6 @@ def _enrich_with_geo_benchmarks(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
 
-    # STEP 0: price_per_m2
-    # Ensure area is numeric and handle potential zeros to avoid inf
-    df["area"] = pd.to_numeric(df["area"], errors="coerce")
-    df["price"] = pd.to_numeric(df["price"], errors="coerce")
-    
-    # Avoid division by zero
-    df["price_per_m2"] = df["price"] / df["area"].replace(0, np.nan)
-
     # STEP 1: merge province benchmarks
     df = df.merge(
         PRICE_TABLE_PROVINCES,
@@ -132,15 +124,8 @@ def _enrich_with_geo_benchmarks(df: pd.DataFrame) -> pd.DataFrame:
 
     df["national_benchmark_m2"] = df["property_type"].apply(get_national_benchmark)
 
-    # STEP 6: engineered features
-    df["diff_to_province_avg_m2"]  = df["price_per_m2"] - df["province_benchmark_m2"]
-    df["ratio_to_province_avg_m2"] = df["price_per_m2"] / df["province_benchmark_m2"]
-
-    df["diff_to_region_avg_m2"]    = df["price_per_m2"] - df["region_benchmark_m2"]
-    df["ratio_to_region_avg_m2"]   = df["price_per_m2"] / df["region_benchmark_m2"]
-
-    df["diff_to_national_avg_m2"]  = df["price_per_m2"] - df["national_benchmark_m2"]
-    df["ratio_to_national_avg_m2"] = df["price_per_m2"] / df["national_benchmark_m2"]
+    # NOTE: Removed diff_to_* and ratio_to_* features as they introduced leakage 
+    # by using the current property's price.
 
     return df
 
