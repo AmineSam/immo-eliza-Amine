@@ -3,15 +3,26 @@
 import pandas as pd
 import numpy as np
 
+from pipelines.stage3_feature_engineering import (
+    TARGET_ENCODING_COLS,
+    TARGET_ENCODING_ALPHA,
+    add_missingness_flags,
+    convert_minus1_to_nan,
+    add_log_features,
+)
+
+
+class Stage3Fitter:
+    """
+    Leakage-safe Stage 3 implementation.
+    Structure is IDENTICAL to your stage3_feature_engineering logic,
+    but separated into fit/transform while respecting your constants,
+    helper functions, feature names, and column lists.
+    """
+
     # ---------------------------------------------------------
     # INTERNAL STATE FITTED FROM TRAIN ONLY
     # ---------------------------------------------------------
-    te_maps_: dict = None
-    global_mean_: float = None
-
-    numeric_medians_: dict = None
-    ordinal_modes_: dict = None
-
     te_maps_: dict = None
     global_mean_: float = None
 
