@@ -2,11 +2,14 @@ import pandas as pd
 import numpy as np
 
 from pipelines.stage3_feature_engineering import stage3_pipeline
+from config.paths import STAGE2_FILE
 
-
-def prepare_stage3_dataset(stage2_path: str) -> pd.DataFrame:
+def prepare_stage3_dataset(stage2_path: str | None = None) -> pd.DataFrame:
     """Load Stage 2, run Stage 3, return enriched df."""
-    df_stage2 = pd.read_csv('../data/clean/clean_dataset_stage3_v4.csv')
+    if stage2_path is None:
+        stage2_path = STAGE2_FILE
+        
+    df_stage2 = pd.read_csv(stage2_path)
     df_stage3 = stage3_pipeline(df_stage2)
     return df_stage3
 

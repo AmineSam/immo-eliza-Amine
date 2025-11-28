@@ -6,43 +6,14 @@ import re
 import numpy as np
 import pandas as pd
 from config.paths import RAW_FILE
-
-
-# =========================================================
-# CONSTANTS
-# =========================================================
-HOUSE_SUBTYPES = {
-    "residence", "villa", "mixed building", "master house",
-    "cottage", "bungalow", "chalet", "mansion"
-}
-
-APARTMENT_SUBTYPES = {
-    "apartment", "ground floor", "penthouse", "duplex",
-    "studio", "loft", "triplex", "student flat", "student housing"
-}
-
-YES_NO_COLS = [
-    "leased", "running_water", "access_disabled", "preemption_right",
-    "has_swimming_pool", "sewer_connection", "attic", "cellar",
-    "entry_phone", "solar_panels", "planning_permission_granted",
-    "alarm", "heat_pump", "surroundings_protected", "air_conditioning",
-    "rain_water_tank", "security_door", "low_energy", "water_softener",
-    "opportunity_for_professional"
-]
-
-NUMERIC_STR_COLS = ["frontage_width", "terrain_width_roadside"]
-
-CORE_DTYPES = {
-    "property_id": "string",
-    "url": "string",
-}
-
-EXPECTED_MIN_COLUMNS = [
-    "url",
-    "property_id",
-    "price",
-]
-
+from config.constants import (
+    HOUSE_SUBTYPES,
+    APARTMENT_SUBTYPES,
+    YES_NO_COLS,
+    NUMERIC_STR_COLS,
+    CORE_DTYPES,
+    EXPECTED_MIN_COLUMNS
+)
 
 # =========================================================
 # HELPERS
