@@ -464,4 +464,4 @@ def stage2_pipeline(df_clean: pd.DataFrame):
     df = cap_values(df, PLAUSIBLE_RANGES)
     df_stage2, df_outliers = split_outliers(df_flagged)
 
-    return df_stage2, df_outliers
+    return df_stage2
