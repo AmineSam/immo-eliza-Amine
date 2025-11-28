@@ -7,8 +7,7 @@ from sklearn.model_selection import train_test_split
 from config.paths import STAGE1_FILE, STAGE2_FILE
 from config.settings import STAGE1_VERSION, STAGE2_VERSION
 
-from pipelines.stage0_load_raw import load_raw_dataset                # :contentReference[oaicite:0]{index=0}
-from pipelines.stage1_basic_cleaning import immovlan_cleaning_pipeline  # :contentReference[oaicite:1]{index=1}
+from pipelines.stage1_basic_cleaning import load_and_clean_stage1  # :contentReference[oaicite:1]{index=1}
 from pipelines.stage2_plausibility_outliers_missing import stage2_pipeline  # :contentReference[oaicite:2]{index=2}
 
 # NEW: import the leakage-free Stage 3
@@ -27,9 +26,8 @@ def run_full_pipeline(
     Original pipeline runner (Stage 0–2 only).
     Stage 3 is deprecated here because it's not leakage-safe.
     """
-    df_raw = load_raw_dataset(raw_path)
 
-    df_stage1 = immovlan_cleaning_pipeline(df_raw)
+    df_stage1 = load_and_clean_stage1(raw_path)
     df_stage1 = df_stage1.copy()
     df_stage1["__stage1_version"] = STAGE1_VERSION
 
@@ -45,10 +43,8 @@ def run_full_pipeline(
         df_stage2.to_csv(STAGE2_FILE, index=False)
 
     return {
-        "stage0": df_raw,
         "stage1": df_stage1,
         "stage2": df_stage2,
-        "outliers": df_outliers,
     }
 
 
@@ -78,14 +74,9 @@ def run_full_pipeline_with_split(
       → Stage3Fitter.fit → Stage3Fitter.transform
     """
     # ---------------------------------------------------------
-    # 0) Load raw
-    # ---------------------------------------------------------
-    df_raw = load_raw_dataset(raw_path)
-
-    # ---------------------------------------------------------
     # 1) Stage 1
     # ---------------------------------------------------------
-    df_stage1 = immovlan_cleaning_pipeline(df_raw)
+    df_stage1 = load_and_clean_stage1(raw_path)
     df_stage1 = df_stage1.copy()
     df_stage1["__stage1_version"] = STAGE1_VERSION
 
@@ -460,10 +451,8 @@ def run_full_pipeline_with_split(
     # 5) Return everything
     # ---------------------------------------------------------
     return {
-        "raw": df_raw,
         "stage1": df_stage1,
         "stage2": df_stage2,
-        "outliers": df_outliers,
         "train": df_train_stage3,
         "val": df_val_stage3, # will be None
         "test": df_test_stage3,
