@@ -1,3 +1,4 @@
+# %% [code] {"jupyter":{"outputs_hidden":false},"execution":{"iopub.status.busy":"2025-11-28T22:11:28.545419Z","iopub.execute_input":"2025-11-28T22:11:28.545665Z","iopub.status.idle":"2025-11-28T22:15:30.213934Z","shell.execute_reply.started":"2025-11-28T22:11:28.545638Z","shell.execute_reply":"2025-11-28T22:15:30.212829Z"}}
 """
 FAST GPU MODEL TUNING — XGBoost + CatBoost ONLY
 - Optuna + pruning

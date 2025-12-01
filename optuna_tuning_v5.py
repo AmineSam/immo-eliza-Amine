@@ -2,10 +2,10 @@
 FAST GPU MODEL TUNING — XGBoost + CatBoost ONLY
 - Optuna + pruning
 - Early stopping
-- Overfitting penalty (gap - 0.14)
+- Overfitting penalty (gap - 0.2) * 0.8  (soft, allows strong models)
 - Saves each model with joblib
+- Weighted ensemble search (XGB vs CAT)
 - NO SHAP
-- NO ENSEMBLE
 """
 
 import pandas as pd
@@ -35,13 +35,13 @@ OUTPUT_DIR = "/kaggle/working/"
 
 TEST_SIZE = 0.15
 RANDOM_STATE = 42
-N_TRIALS = 200      # reduced for speed; can increase
+N_TRIALS = 200
 EARLY_STOPPING_ROUNDS = 50
 
 TARGET_ENCODING_ALPHA = 100.0
 
 # ========================================
-# FEATURE ENGINEERING (SAME AS BEFORE)
+# FEATURE ENGINEERING (SAME STRUCTURE)
 # ========================================
 
 MISSINGNESS_NUMERIC_COLS = [
@@ -65,7 +65,6 @@ GEO_COLUMNS = [
     "national_benchmark_m2"
 ]
 
-
 def add_missingness_flags(df):
     df = df.copy()
     for col in MISSINGNESS_NUMERIC_COLS:
@@ -73,14 +72,12 @@ def add_missingness_flags(df):
             df[f"{col}_missing"] = (df[col] == -1).astype(int)
     return df
 
-
 def convert_minus1_to_nan(df):
     df = df.copy()
     for col in MISSINGNESS_NUMERIC_COLS:
         if col in df.columns:
             df[col] = df[col].replace(-1, np.nan)
     return df
-
 
 def add_log_features(df):
     df = df.copy()
@@ -93,16 +90,15 @@ def add_log_features(df):
             df[f"{col}_log"] = out
     return df
 
-
 def impute_features(df, numeric_medians, ordinal_modes):
     df = df.copy()
 
-    # Numeric
+    # numeric
     for col, med in numeric_medians.items():
         if col in df.columns:
             df[col] = df[col].fillna(med)
 
-    # Binary
+    # binary
     binary_cols = [
         "cellar", "has_garage", "has_swimming_pool", "has_equipped_kitchen",
         "access_disabled", "elevator", "leased", "is_furnished",
@@ -112,13 +108,12 @@ def impute_features(df, numeric_medians, ordinal_modes):
         if col in df.columns:
             df[col] = df[col].fillna(0)
 
-    # Ordinal
+    # ordinal
     for col, mode in ordinal_modes.items():
         if col in df.columns:
             df[col] = df[col].fillna(mode)
 
     return df
-
 
 def fit_stage3(df_train):
     df = df_train.copy()
@@ -176,18 +171,15 @@ def fit_stage3(df_train):
         "global_means": global_means,
     }
 
-
 def transform_stage3(df, fitted):
     df = df.copy()
     df = add_missingness_flags(df)
     df = convert_minus1_to_nan(df)
 
-    # backup geo fields
     geo_backup = {col: df[col].copy() for col in GEO_COLUMNS if col in df.columns}
 
     df = impute_features(df, fitted["numeric_medians"], fitted["ordinal_modes"])
 
-    # restore geo fields
     for col, vals in geo_backup.items():
         df[col] = vals
 
@@ -199,12 +191,10 @@ def transform_stage3(df, fitted):
 
     df = impute_features(df, fitted["numeric_medians"], fitted["ordinal_modes"])
 
-    # restore geo again
     for col, vals in geo_backup.items():
         df[col] = vals
 
     return df
-
 
 def prepare_X_y(df):
     df = df.copy()
@@ -227,30 +217,34 @@ def prepare_X_y(df):
     return X, y
 
 # ========================================
-# PENALTY TO LIMIT OVERFITTING
+# OVERFITTING PENALTY (SOFT, GAP 0.2 * 0.8)
 # ========================================
 
 def penalty(train_r2, val_r2):
     gap = train_r2 - val_r2
-    return max(0, gap - 0.14)
-
+    # allow gap up to 0.18, then penalize lightly
+    return max(0.0, gap - 0.2) * 0.8
 
 # ========================================
-# OPTUNA OBJECTIVES (SUPER OPTIMIZED)
+# OPTUNA OBJECTIVES — HIGH R² MODE
 # ========================================
 
 def objective_xgb(trial, X_train, y_train, X_val, y_val):
 
     params = {
-        'n_estimators': trial.suggest_int('n_estimators', 200, 900),
-        'max_depth': trial.suggest_int('max_depth', 4, 10),
-        'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.15, log=True),
-        'subsample': trial.suggest_float('subsample', 0.7, 1.0),
+        # High-R² space, based on your previous winners
+        'n_estimators': trial.suggest_int('n_estimators', 500, 2000),
+        'max_depth': trial.suggest_int('max_depth', 6, 10),
+        'learning_rate': trial.suggest_float('learning_rate', 0.05, 0.15, log=True),
+
+        'subsample': trial.suggest_float('subsample', 0.6, 0.9),
         'colsample_bytree': trial.suggest_float('colsample_bytree', 0.7, 1.0),
-        'min_child_weight': trial.suggest_int('min_child_weight', 1, 15),
-        'reg_alpha': trial.suggest_float('reg_alpha', 0, 5),
-        'reg_lambda': trial.suggest_float('reg_lambda', 0, 5),
-        # GPU
+
+        'min_child_weight': trial.suggest_int('min_child_weight', 1, 8),
+        'reg_alpha': trial.suggest_float('reg_alpha', 0.0, 3.0),
+        'reg_lambda': trial.suggest_float('reg_lambda', 0.5, 3.0),
+        'gamma': trial.suggest_float('gamma', 0.0, 2.0),
+
         'tree_method': 'gpu_hist',
         'predictor': 'gpu_predictor',
         'random_state': RANDOM_STATE,
@@ -272,25 +266,26 @@ def objective_xgb(trial, X_train, y_train, X_val, y_val):
     val_r2 = r2_score(y_val, val_pred)
     train_r2 = r2_score(y_train, train_pred)
 
-    # Pruning for Optuna
-    trial.report(val_r2, step=0)
+    trial.report(val_r2, 0)
     if trial.should_prune():
         raise optuna.TrialPruned()
 
+    # prioritize high R², but slightly discourage huge gaps
     return val_r2 - penalty(train_r2, val_r2)
 
 
 def objective_cat(trial, X_train, y_train, X_val, y_val):
 
     params = {
-        'iterations': trial.suggest_int('iterations', 300, 900),
-        'depth': trial.suggest_int('depth', 4, 10),
-        'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.15, log=True),
-        'l2_leaf_reg': trial.suggest_float('l2_leaf_reg', 1, 10),
-        'random_strength': trial.suggest_float('random_strength', 1, 5),
-        'bagging_temperature': trial.suggest_float('bagging_temperature', 0, 1),
-        'border_count': trial.suggest_int('border_count', 128, 254),
-        # GPU
+        # High-R² space for CatBoost, inspired by your best config
+        'iterations': trial.suggest_int('iterations', 400, 1500),
+        'depth': trial.suggest_int('depth', 6, 9),
+        'learning_rate': trial.suggest_float('learning_rate', 0.07, 0.15, log=True),
+        'l2_leaf_reg': trial.suggest_float('l2_leaf_reg', 0.5, 5.0),
+        'random_strength': trial.suggest_float('random_strength', 2.0, 10.0),
+        'bagging_temperature': trial.suggest_float('bagging_temperature', 0.3, 1.2),
+        'border_count': trial.suggest_int('border_count', 150, 255),
+
         'task_type': 'GPU',
         'devices': '0',
         'random_state': RANDOM_STATE,
@@ -302,8 +297,8 @@ def objective_cat(trial, X_train, y_train, X_val, y_val):
     model.fit(
         X_train, y_train,
         eval_set=(X_val, y_val),
-        use_best_model=True,
         early_stopping_rounds=EARLY_STOPPING_ROUNDS,
+        use_best_model=True,
         verbose=False
     )
 
@@ -313,32 +308,28 @@ def objective_cat(trial, X_train, y_train, X_val, y_val):
     val_r2 = r2_score(y_val, val_pred)
     train_r2 = r2_score(y_train, train_pred)
 
-    # Pruning
-    trial.report(val_r2, step=0)
+    trial.report(val_r2, 0)
     if trial.should_prune():
         raise optuna.TrialPruned()
 
+    # same penalty logic if you want to keep it consistent
     return val_r2 - penalty(train_r2, val_r2)
 
-
 # ========================================
-# MAIN FLOW
+# MAIN + ENSEMBLE SEARCH
 # ========================================
 
 def main():
     print("=" * 70)
-    print("FAST GPU TUNING — XGBOOST + CATBOOST ONLY (NO SHAP, NO ENSEMBLE)")
+    print("FAST GPU TUNING — XGBOOST + CATBOOST ONLY (+ ENSEMBLE SEARCH)")
     print("=" * 70)
 
-    # load data
     df = pd.read_csv(DATA_PATH)
     df2 = df.drop(columns=["url", "address"], errors="ignore")
 
-    # split
     df_train_val, df_test = train_test_split(df2, test_size=TEST_SIZE, random_state=RANDOM_STATE)
     df_train, df_val = train_test_split(df_train_val, test_size=0.15, random_state=RANDOM_STATE)
 
-    # stage 3
     fitted = fit_stage3(df_train)
     df_train_t = transform_stage3(df_train, fitted)
     df_val_t   = transform_stage3(df_val, fitted)
@@ -349,7 +340,7 @@ def main():
     X_test,  y_test  = prepare_X_y(df_test_t)
 
     # =============================
-    # OPTUNA — XGBoost
+    # XGBoost Tuning
     # =============================
     print("\n=== OPTUNA: XGBoost ===")
 
@@ -368,7 +359,6 @@ def main():
     best_xgb = study_xgb.best_params
     print("Best XGB params:", best_xgb)
 
-    # train final XGB
     model_xgb = xgb.XGBRegressor(
         **best_xgb,
         tree_method="gpu_hist",
@@ -378,9 +368,8 @@ def main():
     model_xgb.fit(X_train, y_train)
     joblib.dump(model_xgb, f"{OUTPUT_DIR}/best_xgb_model.joblib")
 
-
     # =============================
-    # OPTUNA — CatBoost
+    # CatBoost Tuning
     # =============================
     print("\n=== OPTUNA: CatBoost ===")
 
@@ -399,7 +388,6 @@ def main():
     best_cat = study_cat.best_params
     print("Best CAT params:", best_cat)
 
-    # train final CAT
     model_cat = CatBoostRegressor(
         **best_cat,
         task_type="GPU",
@@ -410,27 +398,82 @@ def main():
     model_cat.fit(X_train, y_train)
     joblib.dump(model_cat, f"{OUTPUT_DIR}/best_cat_model.joblib")
 
-
     # =============================
-    # FINAL EVALUATION
+    # Base Model Evaluation
     # =============================
-
     def evaluate(name, model):
         pred_train = model.predict(X_train)
         pred_test  = model.predict(X_test)
+        train_r2 = r2_score(y_train, pred_train)
+        test_r2 = r2_score(y_test, pred_test)
+
         print(f"\n{name}:")
-        print(" Train R²:", round(r2_score(y_train, pred_train), 4))
-        print(" Test  R²:", round(r2_score(y_test, pred_test), 4))
-        print(" Train-Test gap:", round(r2_score(y_train, pred_train) - r2_score(y_test, pred_test), 4))
+        print(" Train R²:", round(train_r2, 4))
+        print(" Test  R²:", round(test_r2, 4))
+        print(" Train-Test gap:", round(train_r2 - test_r2, 4))
         print(" MAE Test:", round(mean_absolute_error(y_test, pred_test), 0))
 
     evaluate("XGBoost", model_xgb)
     evaluate("CatBoost", model_cat)
 
-    print("\nSaved best models in /kaggle/working/")
+    # =============================
+    # Weighted Ensemble Search
+    # =============================
+    print("\n=== WEIGHTED ENSEMBLE SEARCH (XGB vs CAT) ===")
+
+    xgb_train_pred = model_xgb.predict(X_train)
+    xgb_val_pred   = model_xgb.predict(X_val)
+    xgb_test_pred  = model_xgb.predict(X_test)
+
+    cat_train_pred = model_cat.predict(X_train)
+    cat_val_pred   = model_cat.predict(X_val)
+    cat_test_pred  = model_cat.predict(X_test)
+
+    best_w = None
+    best_score = -1e9
+    best_summary = {}
+
+    for w in np.linspace(0.0, 1.0, 21):
+        train_ens = w * xgb_train_pred + (1 - w) * cat_train_pred
+        val_ens   = w * xgb_val_pred   + (1 - w) * cat_val_pred
+
+        train_r2 = r2_score(y_train, train_ens)
+        val_r2   = r2_score(y_val, val_ens)
+        pen = penalty(train_r2, val_r2)
+        score = val_r2 - pen
+
+        if score > best_score:
+            best_score = score
+            best_w = w
+            best_summary = {
+                "train_r2": train_r2,
+                "val_r2": val_r2,
+                "gap": train_r2 - val_r2,
+                "penalty": pen,
+                "score": score,
+            }
+
+    print(f"\nBest ensemble weight w (XGB share) = {best_w:.2f}")
+    print(" Train R²:", round(best_summary["train_r2"], 4))
+    print(" Val   R²:", round(best_summary["val_r2"], 4))
+    print(" Train-Val gap:", round(best_summary["gap"], 4))
+    print(" Penalty:", round(best_summary["penalty"], 4))
+    print(" Score:", round(best_summary["score"], 4))
+
+    ens_test_pred = best_w * xgb_test_pred + (1 - best_w) * cat_test_pred
+    test_r2 = r2_score(y_test, ens_test_pred)
+    test_mae = mean_absolute_error(y_test, ens_test_pred)
+
+    print("\nEnsemble TEST PERFORMANCE:")
+    print(" Test R²:", round(test_r2, 4))
+    print(" MAE:", round(test_mae, 0))
+
+    joblib.dump({"best_weight": best_w}, f"{OUTPUT_DIR}/best_ensemble_weight.joblib")
+
+    print("\nSaved best models and ensemble weight in /kaggle/working/")
     print("Done.")
 
-    return model_xgb, model_cat
+    return model_xgb, model_cat, best_w
 
 
 if __name__ == "__main__":
