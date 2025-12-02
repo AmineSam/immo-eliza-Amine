@@ -17,6 +17,12 @@ STAGE1_FILE = STAGE1_DIR / "cleaned_stage1.csv"
 STAGE2_FILE = STAGE2_DIR / "cleaned_stage2.csv"
 STAGE3_FILE = STAGE3_DIR / "cleaned_stage3.csv"
 
+# External Data
+INCOME_PATH = RAW_DIR / "median_income.csv"
+GEO_PATH = RAW_DIR / "TF_SOC_POP_STRUCT_2025.csv"
+POSTAL_PATH = RAW_DIR / "postal-codes-belgium.csv"
+ADDRESS_PATH = RAW_DIR / "immovlan_addresses.csv"
+
 # Make sure dirs exist (idempotent)
 for p in [RAW_DIR, STAGE1_DIR, STAGE2_DIR, STAGE3_DIR, LOG_DIR]:
     p.mkdir(parents=True, exist_ok=True)

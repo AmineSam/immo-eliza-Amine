@@ -98,19 +98,6 @@ def stage3_missingness_handler(df: pd.DataFrame) -> pd.DataFrame:
 # 2. CORE FEATURE ENGINEERING
 # ============================================================
 
-def add_price_per_m2(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    price_per_m2 = price / area.
-    Invalid or missing area → NaN.
-    """
-    df = df.copy()
-
-    if "price" in df.columns and "area" in df.columns:
-        df["price_per_m2"] = df["price"] / df["area"]
-        invalid = (df["area"].isna()) | (df["area"] <= 0)
-        df.loc[invalid, "price_per_m2"] = np.nan
-
-    return df
 
 
 def add_log_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -144,27 +131,13 @@ def add_geo_aggregates(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
 
-    # Ensure price_per_m2 exists
-    if "price_per_m2" not in df.columns:
-        df = add_price_per_m2(df)
-
     # Postal aggregates
     if {"postal_code", "price"}.issubset(df.columns):
         df["postal_price_mean"] = df.groupby("postal_code")["price"].transform("mean")
 
-    if {"postal_code", "price_per_m2"}.issubset(df.columns):
-        df["postal_price_per_m2_mean"] = (
-            df.groupby("postal_code")["price_per_m2"].transform("mean")
-        )
-
     # Locality aggregates
     if {"locality", "price"}.issubset(df.columns):
         df["locality_price_mean"] = df.groupby("locality")["price"].transform("mean")
-
-    if {"locality", "price_per_m2"}.issubset(df.columns):
-        df["locality_price_per_m2_mean"] = (
-            df.groupby("locality")["price_per_m2"].transform("mean")
-        )
 
     return df
 
@@ -288,7 +261,6 @@ def stage3_pipeline(df_stage2: pd.DataFrame) -> pd.DataFrame:
     df = final_imputation(df)
 
     # 2) Core FE
-    df = add_price_per_m2(df)
     df = add_log_features(df)
 
     # 3) Geo FE

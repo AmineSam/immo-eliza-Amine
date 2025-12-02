@@ -4,13 +4,10 @@ import pandas as pd
 import numpy as np
 
 from pipelines.stage3_feature_engineering import (
-    MISSINGNESS_NUMERIC_COLS,
-    LOG_FEATURES,
     TARGET_ENCODING_COLS,
     TARGET_ENCODING_ALPHA,
     add_missingness_flags,
     convert_minus1_to_nan,
-    add_price_per_m2,
     add_log_features,
 )
 
@@ -26,11 +23,6 @@ class Stage3Fitter:
     # ---------------------------------------------------------
     # INTERNAL STATE FITTED FROM TRAIN ONLY
     # ---------------------------------------------------------
-    postal_price_mean_: dict = None
-    postal_ppm2_mean_: dict = None
-    locality_price_mean_: dict = None
-    locality_ppm2_mean_: dict = None
-
     te_maps_: dict = None
     global_mean_: float = None
 
@@ -45,13 +37,10 @@ class Stage3Fitter:
         return [
             "area", "rooms", "living_room_surface", "build_year",
             "facades_number", "bathrooms", "toilets",
-            "cadastral_income_house","median_income", 
-            'apt_avg_m2_province',
-            'house_avg_m2_province', 'apt_avg_m2_region', 'house_avg_m2_region',
+            'cadastral_income_house', 'median_income',
+            'apt_avg_m2_province', 'house_avg_m2_province',
+            'apt_avg_m2_region', 'house_avg_m2_region',
             'province_benchmark_m2', 'region_benchmark_m2', 'national_benchmark_m2',
-            'diff_to_province_avg_m2', 'ratio_to_province_avg_m2',
-            'diff_to_region_avg_m2', 'ratio_to_region_avg_m2',
-            'diff_to_national_avg_m2', 'ratio_to_national_avg_m2',
         ]
 
     @staticmethod
@@ -114,31 +103,20 @@ class Stage3Fitter:
     # ---------------------------------------------------------
     # FIT GEO
     # ---------------------------------------------------------
-    def _fit_geo(self, df: pd.DataFrame):
-        #self.postal_price_mean_ = df.groupby("postal_code")["price"].mean().to_dict()
-        self.postal_ppm2_mean_ = df.groupby("postal_code")["price_per_m2"].mean().to_dict()
-
-        #self.locality_price_mean_ = df.groupby("locality")["price"].mean().to_dict()
-        self.locality_ppm2_mean_ = df.groupby("locality")["price_per_m2"].mean().to_dict()
-
-        self.municipality_ppm2_mean_ = df.groupby("municipality_nl")["price_per_m2"].mean().to_dict()
-        self.arrondissement_ppm2_mean_ = df.groupby("arrondissement_nl")["price_per_m2"].mean().to_dict()
+    # ---------------------------------------------------------
+    # FIT GEO
+    # ---------------------------------------------------------
+    # ---------------------------------------------------------
+    # FIT GEO (REMOVED LEAKAGE)
+    # ---------------------------------------------------------
+    # def _fit_geo(self, df: pd.DataFrame):
+    #     pass 
 
     # ---------------------------------------------------------
-    # APPLY GEO (train-fitted)
+    # APPLY GEO (REMOVED LEAKAGE)
     # ---------------------------------------------------------
-    def _apply_geo(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = df.copy()
-
-        #df["postal_price_mean"] = df["postal_code"].map(self.postal_price_mean_)
-        df["postal_price_per_m2_mean"] = df["postal_code"].map(self.postal_ppm2_mean_)
-
-        #df["locality_price_mean"] = df["locality"].map(self.locality_price_mean_)
-        df["locality_price_per_m2_mean"] = df["locality"].map(self.locality_ppm2_mean_)
-
-        df["municipality_price_per_m2_mean"] = df["municipality_nl"].map(self.municipality_ppm2_mean_)
-        df["arrondissement_price_per_m2_mean"] = df["arrondissement_nl"].map(self.arrondissement_ppm2_mean_)
-        return df
+    # def _apply_geo(self, df: pd.DataFrame) -> pd.DataFrame:
+    #     return df.copy()
 
     # ---------------------------------------------------------
     # TARGET ENCODING — FIT
@@ -184,11 +162,9 @@ class Stage3Fitter:
         df = self._apply_imputation(df)
 
         # 3) Core FE
-        df = add_price_per_m2(df)
         df = add_log_features(df)
 
         # 4) Fit GEO + TE (train only)
-        self._fit_geo(df)
         self._fit_target_encoding(df)
 
         # 5) Fit FINAL imputers using FE output
@@ -208,11 +184,9 @@ class Stage3Fitter:
         df = self._apply_imputation(df)
 
         # 3) Core FE
-        df = add_price_per_m2(df)
         df = add_log_features(df)
 
         # 4) GEO + TE (creates NaNs)
-        df = self._apply_geo(df)
         df = self._apply_target_encoding(df)
 
         # 5) FINAL IMPUTATION (fix NaNs from FE/TE/GEO)

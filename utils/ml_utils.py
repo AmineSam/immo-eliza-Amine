@@ -2,11 +2,14 @@ import pandas as pd
 import numpy as np
 
 from pipelines.stage3_feature_engineering import stage3_pipeline
+from config.paths import STAGE2_FILE
 
-
-def prepare_stage3_dataset(stage2_path: str) -> pd.DataFrame:
+def prepare_stage3_dataset(stage2_path: str | None = None) -> pd.DataFrame:
     """Load Stage 2, run Stage 3, return enriched df."""
-    df_stage2 = pd.read_csv('../data/clean/clean_dataset_stage3_v4.csv')
+    if stage2_path is None:
+        stage2_path = STAGE2_FILE
+        
+    df_stage2 = pd.read_csv(stage2_path)
     df_stage3 = stage3_pipeline(df_stage2)
     return df_stage3
 
@@ -38,9 +41,9 @@ def prepare_X_y(df: pd.DataFrame, model_type: str = "linear"):
 
     # 3) Remove leakage features
     #    Anything directly derived from price
-    leakage_cols = []
-    leakage_cols += [c for c in X.columns if c.startswith("price_per_m2")]
-    leakage_cols += ["price_log"]
+    leakage_cols = ["price_log"]
+    # Also drop any remaining diff_to_* or ratio_to_* if they exist
+    leakage_cols += [c for c in X.columns if c.startswith("diff_to_") or c.startswith("ratio_to_")]
     X = X.drop(columns=leakage_cols, errors="ignore")
 
     # 4) Model-type specific filtering

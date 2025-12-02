@@ -1,34 +1,22 @@
+# =========================================================
+# STAGE 1 — Load Raw + Basic Cleaning (Merged Stage0 + Stage1)
+# =========================================================
+
 import re
 import numpy as np
 import pandas as pd
+from config.paths import RAW_FILE
+from config.constants import (
+    HOUSE_SUBTYPES,
+    APARTMENT_SUBTYPES,
+    YES_NO_COLS,
+    NUMERIC_STR_COLS,
+    CORE_DTYPES,
+    EXPECTED_MIN_COLUMNS
+)
 
 # =========================================================
-# 0. CONSTANTS
-# =========================================================
-HOUSE_SUBTYPES = {
-    "residence", "villa", "mixed building", "master house",
-    "cottage", "bungalow", "chalet", "mansion"
-}
-
-APARTMENT_SUBTYPES = {
-    "apartment", "ground floor", "penthouse", "duplex",
-    "studio", "loft", "triplex", "student flat", "student housing"
-}
-
-YES_NO_COLS = [
-    "leased", "running_water", "access_disabled", "preemption_right",
-    "has_swimming_pool", "sewer_connection", "attic", "cellar",
-    "entry_phone", "solar_panels", "planning_permission_granted",
-    "alarm", "heat_pump", "surroundings_protected", "air_conditioning",
-    "rain_water_tank", "security_door", "low_energy", "water_softener",
-    "opportunity_for_professional"
-]
-
-NUMERIC_STR_COLS = ["frontage_width", "terrain_width_roadside"]
-
-
-# =========================================================
-# 1. HELPERS
+# HELPERS
 # =========================================================
 def normalize_subtype(s: str):
     if not isinstance(s, str):
@@ -70,7 +58,7 @@ def clean_numeric_str_series(series: pd.Series):
 
 
 # =========================================================
-# 2. MODULE A — URL extraction
+# MODULE A — URL extraction
 # =========================================================
 def extract_from_url(df, url_col="url"):
     df = df.copy()
@@ -83,7 +71,7 @@ def extract_from_url(df, url_col="url"):
 
 
 # =========================================================
-# 3. MODULE B — Cleaning (price, vat, numeric)
+# MODULE B — Cleaning (price, vat, numeric)
 # =========================================================
 def clean_price_vat(df):
     df = df.copy()
@@ -105,7 +93,7 @@ def clean_numeric_columns(df):
 
 
 # =========================================================
-# 4. MODULE C — Yes/No → {0,1,NaN}
+# MODULE C — Yes/No → {0,1,NaN}
 # =========================================================
 def encode_yes_no(df):
     df = df.copy()
@@ -114,7 +102,7 @@ def encode_yes_no(df):
 
 
 # =========================================================
-# 5. MODULE D — Normalize subtype + property type mapping
+# MODULE D — Normalize subtype + property type mapping
 # =========================================================
 def process_property_types(df):
     df = df.copy()
@@ -124,12 +112,46 @@ def process_property_types(df):
 
 
 # =========================================================
-# 6. MASTER PIPELINE — Run everything
+# MASTER PIPELINE — STAGE 0 + STAGE 1 (Merged)
 # =========================================================
-def immovlan_cleaning_pipeline(df_raw):
-    """Full ETL pipeline for Immovlan property listings."""
-    df = df_raw.drop_duplicates().copy()
+def load_and_clean_stage1(path: str | None = None) -> pd.DataFrame:
+    """
+    FULL STAGE 1:
+    1. Load raw CSV (merged Stage0)
+    2. Schema checks / dtype enforcement
+    3. URL extraction
+    4. Base cleaning & normalization
+    """
 
+    # ------------------------------------
+    # STAGE 0 — Load raw dataset
+    # ------------------------------------
+    if path is None:
+        path = RAW_FILE
+
+    df = pd.read_csv(path, low_memory=False)
+
+    df = df.drop_duplicates()
+
+    # Enforce dtypes
+    for col, dtype in CORE_DTYPES.items():
+        if col in df.columns:
+            df[col] = df[col].astype(dtype)
+
+    # Convert price to numeric
+    df["price"] = pd.to_numeric(df["price"], errors="coerce")
+
+    # Required columns
+    missing = [c for c in EXPECTED_MIN_COLUMNS if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing expected raw columns: {missing}")
+
+    # Remove invalid rows
+    df = df[df["property_id"].notna() & df["url"].notna() & df["price"].notna()]
+
+    # ------------------------------------
+    # STAGE 1 — Immovlan cleaning
+    # ------------------------------------
     df = extract_from_url(df)
     df = df.dropna(subset=["locality", "postal_code", "property_subtype"])
     df = clean_price_vat(df)

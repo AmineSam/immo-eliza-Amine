@@ -3,17 +3,17 @@
 import pandas as pd
 import numpy as np
 
-# ============================================================
-# 0. LOAD EXTERNAL LOOKUPS (same sources as in merging.py)
-# ============================================================
+from config.paths import INCOME_PATH, GEO_PATH, POSTAL_PATH, ADDRESS_PATH
+from config.constants import (
+    PROVINCE_TO_REGION,
+    PRICE_TABLE_PROVINCES,
+    PRICE_TABLE_REGIONS,
+    PRICE_TABLE_BELGIUM
+)
 
-# Paths assume pipeline is run from the repo root,
-# identical to your original script.
-INCOME_PATH = "../data/raw/median_income.csv"
-GEO_PATH = "../data/raw/TF_SOC_POP_STRUCT_2025.csv"
-POSTAL_PATH = "../data/raw/postal-codes-belgium.csv"
-ADDRESS_PATH = "../data/raw/immovlan_addresses.csv"
-
+# ============================================================
+# 0. LOAD EXTERNAL LOOKUPS
+# ============================================================
 
 def _load_support_tables():
     # Income (GDP) per municipality
@@ -70,90 +70,18 @@ def _load_support_tables():
 
 
 # ============================================================
-# 1. PROVINCE → REGION MAPPING
+# 2. BENCHMARK TABLES (Now imported from config.constants)
 # ============================================================
-
-province_to_region = {
-    # --- Flanders ---
-    "Provincie Antwerpen": "Flanders",
-    "Province d’Anvers": "Flanders",
-    "Province d'Anvers": "Flanders",
-
-    "Provincie Oost-Vlaanderen": "Flanders",
-    "Province de Flandre orientale": "Flanders",
-
-    "Provincie West-Vlaanderen": "Flanders",
-    "Province de Flandre occidentale": "Flanders",
-
-    "Provincie Vlaams-Brabant": "Flanders",
-    "Province du Brabant flamand": "Flanders",
-
-    "Provincie Limburg": "Flanders",
-    "Province du Limbourg": "Flanders",
-
-    # --- Wallonia ---
-    "Provincie Henegouwen": "Wallonia",
-    "Province du Hainaut": "Wallonia",
-
-    "Provincie Luik": "Wallonia",
-    "Province de Liège": "Wallonia",
-
-    "Provincie Namen": "Wallonia",
-    "Province de Namur": "Wallonia",
-
-    "Provincie Waals-Brabant": "Wallonia",
-    "Province du Brabant wallon": "Wallonia",
-
-    "Provincie Luxemburg": "Wallonia",
-    "Province du Luxembourg": "Wallonia",
-
-    # --- Brussels ---
-    "Brussels Hoofdstedelijk Gewest": "Brussels",
-    "Région de Bruxelles-Capitale": "Brussels",
-}
-
-
-# ============================================================
-# 2. BENCHMARK TABLES (unchanged from your script)
-# ============================================================
-
-price_table_provinces = pd.DataFrame({
-    "province": [
-       "Provincie Antwerpen", "Provincie Oost-Vlaanderen",
-       "Provincie Henegouwen", "Brussels Hoofdstedelijk Gewest",
-       "Provincie Luik", "Provincie West-Vlaanderen", "Provincie Namen",
-       "Provincie Waals-Brabant", "Provincie Vlaams-Brabant",
-       "Provincie Limburg", "Provincie Luxemburg"
-    ],
-    "apt_avg_m2":  [2849, 2890, 1847, 3423, 2292, 3760, 2553, 3244, 3260, 2562, 2448],
-    "house_avg_m2":[2419, 2257, 1411, 3308, 1708, 2048, 1673, 2342, 2539, 1926, 1620],
-})
-
-price_table_regions = pd.DataFrame({
-    "region":       ["Flanders", "Wallonia", "Brussels"],
-    "apt_avg_m2":   [3133,      2387,       3423],
-    "house_avg_m2": [2266,      1642,       3308],
-})
-
-price_table_belgium = {
-    "apartment": {"avg": 3091, "min": 2188, "max": 4358},
-    "house":     {"avg": 2076, "min": 1223, "max": 3296},
-}
-
 
 def _enrich_with_geo_benchmarks(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Your original enrich_with_geo_benchmarks logic,
-    applied AFTER all geo/GDP/address merges.
+    Applied AFTER all geo/GDP/address merges.
     """
     df = df.copy()
 
-    # STEP 0: price_per_m2
-    df["price_per_m2"] = df["price"] / df["area"]
-
     # STEP 1: merge province benchmarks
     df = df.merge(
-        price_table_provinces,
+        PRICE_TABLE_PROVINCES,
         how="left",
         left_on="province_nl",
         right_on="province",
@@ -164,7 +92,7 @@ def _enrich_with_geo_benchmarks(df: pd.DataFrame) -> pd.DataFrame:
     })
 
     # STEP 2: merge region benchmarks
-    df = df.merge(price_table_regions, how="left", on="region")
+    df = df.merge(PRICE_TABLE_REGIONS, how="left", on="region")
     df = df.rename(columns={
         "apt_avg_m2": "apt_avg_m2_region",
         "house_avg_m2": "house_avg_m2_region",
@@ -185,19 +113,19 @@ def _enrich_with_geo_benchmarks(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     # STEP 5: national benchmark selector
-    df["national_benchmark_m2"] = df["property_type"].apply(
-        lambda t: price_table_belgium[t.lower()]["avg"]
-    )
+    # Handle case where property_type might be missing or not in table
+    def get_national_benchmark(t):
+        if not isinstance(t, str):
+            return np.nan
+        t_lower = t.lower()
+        if t_lower in PRICE_TABLE_BELGIUM:
+            return PRICE_TABLE_BELGIUM[t_lower]["avg"]
+        return np.nan
 
-    # STEP 6: engineered features
-    df["diff_to_province_avg_m2"]  = df["price_per_m2"] - df["province_benchmark_m2"]
-    df["ratio_to_province_avg_m2"] = df["price_per_m2"] / df["province_benchmark_m2"]
+    df["national_benchmark_m2"] = df["property_type"].apply(get_national_benchmark)
 
-    df["diff_to_region_avg_m2"]    = df["price_per_m2"] - df["region_benchmark_m2"]
-    df["ratio_to_region_avg_m2"]   = df["price_per_m2"] / df["region_benchmark_m2"]
-
-    df["diff_to_national_avg_m2"]  = df["price_per_m2"] - df["national_benchmark_m2"]
-    df["ratio_to_national_avg_m2"] = df["price_per_m2"] / df["national_benchmark_m2"]
+    # NOTE: Removed diff_to_* and ratio_to_* features as they introduced leakage 
+    # by using the current property's price.
 
     return df
 
@@ -208,7 +136,7 @@ def _enrich_with_geo_benchmarks(df: pd.DataFrame) -> pd.DataFrame:
 
 def stage25_geo_enrichment(df_stage2: pd.DataFrame) -> pd.DataFrame:
     """
-    Stage 2.5 — integrate your full merging.py logic into the pipeline:
+    Stage 2.5 — integrate full merging logic into the pipeline:
 
     - Uses Stage 2 output as 'properties_df'
     - Adds:
@@ -226,11 +154,12 @@ def stage25_geo_enrichment(df_stage2: pd.DataFrame) -> pd.DataFrame:
     # ---- Load external lookups (GDP, geo, postal, address) ----
     income_lookup, geo_lookup, postal_lookup, address = _load_support_tables()
 
-    # ---- Basic filters & helpers (same as your script) ----
-    df["locality_lower"] = df["locality"].str.lower().str.strip()
-    df = df.dropna(subset=["price", "locality"])
-
-    # Normalize postal_code as string like in merging.py
+    # ---- Basic filters & helpers ----
+    if "locality" in df.columns:
+        df["locality_lower"] = df["locality"].str.lower().str.strip()
+        df = df.dropna(subset=["locality"])
+    
+    # Normalize postal_code as string
     df["postal_code"] = df["postal_code"].fillna(0).astype(int).astype(str)
     df.loc[df["postal_code"] == "0", "postal_code"] = None
 
@@ -266,10 +195,11 @@ def stage25_geo_enrichment(df_stage2: pd.DataFrame) -> pd.DataFrame:
     # For unmatched, try French municipality names
     unmatched_mask = properties_with_geo_gdp["median_income"].isna()
     if unmatched_mask.sum() > 0:
+        # Filter french_matches to only relevant municipality codes to speed up
+        relevant_codes = properties_with_geo_gdp.loc[unmatched_mask, "municipality_code"]
+        
         french_matches = properties_with_geo[
-            properties_with_geo["municipality_code"].isin(
-                properties_with_geo_gdp.loc[unmatched_mask, "municipality_code"]
-            )
+            properties_with_geo["municipality_code"].isin(relevant_codes)
         ].merge(
             income_lookup,
             left_on="municipality_fr_lower",
@@ -277,11 +207,14 @@ def stage25_geo_enrichment(df_stage2: pd.DataFrame) -> pd.DataFrame:
             how="inner",
         )
 
-        for _, row in french_matches.iterrows():
-            mask = properties_with_geo_gdp["municipality_code"] == row["municipality_code"]
-            properties_with_geo_gdp.loc[mask, "median_income"] = row["median_income"]
+        # Update median_income where found via French name
+        # We can use map for faster update. Ensure unique index.
+        french_matches = french_matches.drop_duplicates(subset=["municipality_code"])
+        income_map = french_matches.set_index("municipality_code")["median_income"]
+        properties_with_geo_gdp.loc[unmatched_mask, "median_income"] = \
+            properties_with_geo_gdp.loc[unmatched_mask, "municipality_code"].map(income_map)
 
-    # Keep only rows with income data
+    # Keep only rows with income data (as per original logic)
     properties_with_geo_gdp = properties_with_geo_gdp[
         properties_with_geo_gdp["median_income"].notna()
     ]
@@ -307,7 +240,7 @@ def stage25_geo_enrichment(df_stage2: pd.DataFrame) -> pd.DataFrame:
 
     properties_with_geo_gdp["region"] = properties_with_geo_gdp[
         "province_lang"
-    ].map(province_to_region)
+    ].map(PROVINCE_TO_REGION)
 
     # ------------------------------------------------------------------
     # 5) Merge with address table
@@ -322,5 +255,14 @@ def stage25_geo_enrichment(df_stage2: pd.DataFrame) -> pd.DataFrame:
     # 6) Apply benchmark enrichment & engineered features
     # ------------------------------------------------------------------
     df_enriched = _enrich_with_geo_benchmarks(properties_with_geo_gdp)
+
+    # Cleanup intermediate columns
+    drop_cols = [
+        'locality_lower', 'municipality_code', 'CD_REFNIS',
+        'municipality_nl_lower', 'municipality_fr_lower',
+        'name', 'province_lang'
+        # 'municipality_fr', 'arrondissement_fr', 'province_fr' # Keep these if needed? Original dropped them.
+    ]
+    df_enriched = df_enriched.drop(columns=drop_cols, errors='ignore')
 
     return df_enriched
