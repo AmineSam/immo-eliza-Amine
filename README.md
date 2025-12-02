@@ -188,7 +188,7 @@ Best Hyperparameters:
 - model__n_estimators: 500
 - model__subsample: 0.8
 
-![alt text](image.png)
+![alt text](images/image.png)
 
 ## 9. SHAP Feature Interpretation
 
@@ -201,7 +201,7 @@ Key insights:
 
 SHAP summary and bar plots provided a clear global view of feature importance without introducing any leakage.
 
-![alt text](image-1.png)
+![alt text](images/image-1.png)
 
 ## 10. Future Improvements
 
