@@ -2,17 +2,16 @@
 
 ## 1. Project Overview
 
-This project implements a **robust, leakage-safe, end-to-end data pipeline** for predicting real-estate prices in Belgium.  
-The dataset is enriched with:
+Immo-Eliza is a **fully modular, leakage-safe machine-learning system** designed to predict real-estate prices in Belgium using enriched geographic, socio‑economic, OSM distance, clustering, and advanced ML features.
 
-- Geographic hierarchy (municipality, arrondissement, province, region)  
-- Socio-economics (median municipal income)  
-- Address-level fields  
-- National, regional, and provincial benchmark prices per m²  
-- Local price aggregates (postal, locality)  
-- Advanced engineered ML features (missingness flags, log transforms, smoothed target encoding)
+The project includes:
 
-The pipeline is designed to be **modular, reproducible**, allowing training of models such as Linear Regression, Random Forest, and XGBoost.
+- Multi-stage preprocessing pipeline  
+- Geographic + economic enrichment  
+- Specialized models for **houses** and **apartments** 
+- Reduced‑feature modelling for user friendly web app later  
+- GPU‑accelerated Optuna optimization (XGBoost + CatBoost) on Kaggle  
+- Ensemble tuning and robust cross-validation  
 
 ---
 
@@ -24,6 +23,7 @@ immo-eliza-Amine/
 ├── config/
 │   ├── paths.py
 │   └── settings.py
+│   └── constants.py
 │
 ├── data/
 │   ├── raw/
@@ -32,188 +32,154 @@ immo-eliza-Amine/
 │   ├── stage3/
 │   └── clean/
 │
+├── models/
+│   ├── model_xgb_apartment.pkl
+│   ├── model_xgb_house.pkl
+│   ├── stage3_pipeline_apartment.pkl
+│   ├── stage3_pipeline_house.pkl
+│
 ├── notebooks/
 │   └── analysis.ipynb
+│   └── specilized_models.ipynb
 │
 ├── pipelines/
-│   ├── stage0_load_raw.py
+│   ├── export_for_kaggle.py
 │   ├── stage1_basic_cleaning.py
 │   ├── stage2_plausibility_outliers_missing.py
 │   ├── stage2_5_geo_enrichment.py
 │   ├── stage3_feature_engineering.py
 │   ├── stage3_fitted.py
 │   └── pipeline_runner.py
+│   └── stage3_fitted.py
 │
 └── utils/
-    └── ml_utils.py
+│   └── ml_utils.py
+│   └── apartment_optimization_gpu.py
+│   └── house_optimization_gpu.py
+│   └── optuna_tuning_v5.py
+│   └── stage3_utils.py
 ```
 
 ---
 
-## 3. End-to-End Pipeline Architecture
-
-The processing workflow is structured into **strict leakage-safe stages**:
+## 3. High-Level Pipeline Architecture
 
 ```
-Stage 0 → Stage 1 → Stage 2 → Stage 2.5 → Stratified Split → Stage 3 (Fit/Transform)
+Stage 1 → Stage 2 → Stage 2.5  → Split → Stage 3 Fit → Stage 3 Transform
 ```
 
----
-
-## 4. Stage-by-Stage Documentation
-
-### 4.1 Stage 0 — Load Raw Dataset
-
-- Load CSV  
-- Remove duplicates  
-- Validate schema  
-- Enforce core dtypes  
-- Drop invalid rows  
-
-### 4.2 Stage 1 — URL-Based Extraction & Basic Cleaning
-
-- Extract postal code, locality, subtype  
-- Clean numeric/Yes–No fields  
-- Normalize property subtype  
-- Map to Apartment / House / Other  
-
-### 4.3 Stage 2 — Plausibility Checks, Encoding, Outlier Removal
-
-Stage 2 applies domain-driven cleaning rules to guarantee data consistency without introducing leakage.
-
-All plausibility thresholds (price, area, rooms, EPC, surfaces, floors, CO₂, cadastral income, etc.) were defined exclusively using domain expertise and real-estate knowledge, not statistical summaries computed from the dataset.
-This ensures the entire process remains leakage-free, since no information from validation or test distributions is used during cleaning.
-- Drop sparse/noisy columns  
-- Encode categorical & binary fields  
-- Replace missing numeric with -1  
-- Apply plausibility rules  
-- Split out outliers  
-
-### 4.4 Stage 2.5 — Geographic & Socio-Economic Enrichment
-
-Adds:
-
-- Municipality, arrondissement, province, region  
-- Median municipal income from external datasets
-- Address table  
-- Provincial, regional, national benchmark prices  
-- Engineered benchmark features  
-
-### 4.5 Stratified Split (70/15/15)
-
-- Stratify on price quantile bins  
-- Prevent distribution shift  
-- Ensures all price ranges represented  
-
-### 4.6 Stage 3 — Final Feature Engineering (Fit/Transform)
-
-- Missingness flags  
-- Convert -1 → NaN  
-- Final imputation (train-fitted)  
-- price_per_m2, log(area)  
-- Geo aggregates  
-- Target encoding (train-only)  
+### Key Principles
+- Domain-based thresholds 
+- Train/val/test split **before** any fitted transformation  
+- Imputers, encoders, TE: fit only on training  
 
 ---
 
-## 5. Machine Learning Workflow
+## 4. Preprocessing Overview
 
-### Model Modes
+### Stage 1 — Base Cleaning
+- Raw loading  
+- Extraction from URL fields  
+- Normalization of binary & numeric data  
 
-**Linear Regression**  
-- Numeric only  
-- No TE  
-- No derived leakage features  
+### Stage 2 — Plausibility & Outlier Filtering
+- Domain thresholds (price, area, EPC, surfaces, rooms…)  
+- Removes inconsistencies & data errors  
 
-**Random Forest / XGBoost**  
-- Numeric + TE  
-- All engineered features  
-- Drop leak-prone features  
+### Stage 2.5 — Geographic & Socio‑Economic Enrichment
+- Region, province, arrondissement, municipality  
+- Median income  
+- Benchmark price-per-m² (national/regional/provincial)  
+- Locality & postal aggregates  
+  
 
----
-
-## 6. Model Performance Summary
-
-**Linear Regression**  
-- R²: 0.58–0.60 
-- MAE: 86k-90k 
-- Underfits slightly  
-
-**Random Forest**  
-- R²: 0.75–0.78  
-- MAE ~51k–53k  
-
-**XGBoost (Best), light tuning and 5-cross validation**  
-- R²: 0.8474 ± 0.0230 
-- MAE: 45.2k ± 1405
+### Stage 3 — Final Modelling Features
+- Missingness indicators  
+- Log transforms  
+- Target encoding (smoothed)  
 
 ---
 
-## 7. Running the Pipeline
+## 5. Specialized Models
 
+### House-Only Model
+ 
+
+### Apartment-Only Model
+
+---
+
+## 6. Reduced-Feature Model (User friendly inputs)
+
+
+---
+
+## 7. Machine Learning Models
+
+Implemented:
+- **XGBoost** (primary general model)   R²: 0.86 and MAE: 44510 eur (5 CV)
+- **CatBoost** (GPU‑optimized strong alternative)   R²: 0.85 and MAE: 43703 eur (5 CV)
+- Random Forest (baseline)  R²: 0.83 and MAE: 49437 eur (5 CV)
+- Linear Regression (baseline)   R²: 0.60 and MAE: 90403 eur (5 CV)
+
+### Ensemble
+Weighted average of tuned XGB + tuned CAT  
+Optimized with:
+- 5-fold CV  
+- Gap constraint: R² gap < 0.1
+- Best results for 60% XGBoost and 40% CatBoost
+  - slightly improved R²(0.86)
+  - reduced gap of overfitting (less than 0.12 between R² in train and test)
+
+---
+
+## 8. Kaggle GPU Optimization (Optuna)
+
+A dedicated GPU script performs:
+- Optuna hyperparameter search  
+- Early stopping & pruning  
+- MAE-centric objective  
+- R²-centric objective
+- Constraint on generalization gap  
+
+Models Tuned:
+- XGBoost  
+- CatBoost  
+
+---
+
+## 9. How to Run
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+. .venv/bin/activate  # or Scripts\activate on Windows
 pip install -r requirements.txt
 ```
-
 ```python
-from pipelines.pipeline_runner import run_full_pipeline_with_split
-run_full_pipeline_with_split()
+from pipelines.export_for_kaggle import export_for_kaggle  
+from utils.predictor import predict_price
+from utils.stage3_utils import (
+    fit_stage3,
+    transform_stage3,
+    prepare_X_y
+)
+export_for_kaggle()
+predict_price(house_test)
+predict_price(apartment_test)
 ```
 
-```python
-jupyter notebook notebooks/analysis.ipynb
-```
+
+## 10. Future Work
+
+- Deep-learning price models  
+- Transformer-based geospatial embeddings  
+- H3 spatial hierarchy encoding  
+- Time-aware price dynamics  
+- Streamlit or FastAPI deployment  
+- Automated monitoring & drift detection  
 
 ---
 
-## 8. XGBoost Tuning & Cross-Validation
+## 11. Author
 
-XGBoost was tuned using a focused grid search with **3-fold cross-validation** to balance training time and generalization.  
-Only the most impactful hyperparameters were explored (e.g., `learning_rate`, `max_depth`, `n_estimators`, `subsample`, `colsample_bytree`).
-
-This approach allowed the model to:
-- Reduce overfitting  
-- Stabilize performance across splits  
-- Improve MAE and R² compared to untuned XGBoost  
-
-The tuning was fully **leakage-safe**, applied only on the training split after Stage 3 feature engineering.
-
-Best Hyperparameters:
-
-- model__colsample_bytree: 0.8
-- model__learning_rate: 0.05
-- model__max_depth: 10
-- model__n_estimators: 500
-- model__subsample: 0.8
-
-![alt text](images/image.png)
-
-## 9. SHAP Feature Interpretation
-
-SHAP (Shapley Values) was used to interpret model predictions and understand which engineered features contributed most to price estimation.
-
-Key insights:
-- Area, bathrooms, geo-aggregates, and benchmark ratios were strong positive contributors.
-- Missingness flags, poor property state, and low regional ratios often pushed predictions down.
-- Geo-features from Stage 2.5 were highly influential, confirming the strength of the enrichment step.
-
-SHAP summary and bar plots provided a clear global view of feature importance without introducing any leakage.
-
-![alt text](images/image-1.png)
-
-## 10. Future Improvements
-
-- OSM distance-based features (distance to nearest facility)  
-- Nearest-neighbor comparable prices  
-- Micro-market clustering  
-- CatBoost / LightGBM  
-- Optuna tuning 
-- Specialized models for luxuary vs luxuary
-- Specialized models for apartment vs house
-- Robust tuning of the ensemble models
----
-
-### 9. Contributors
-- [Amine Samoudi](https://github.com/AmineSam)
+**Amine Samoudi**  
+GitHub: https://github.com/AmineSam
