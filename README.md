@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 
-Immo-Eliza is a **fully modular, leakage-safe machine-learning system** designed to predict real-estate prices in Belgium using enriched geographic, socio‑economic, and advanced ML features.
+Immo-Eliza is a **fully modular, leakage-safe machine-learning system** designed to predict real-estate prices in Belgium using enriched geographic, socio‑economic, OSM distance, clustering, and advanced ML features.
 
 The project includes:
 
@@ -98,29 +98,16 @@ Stage 1 → Stage 2 → Stage 2.5  → Split → Stage 3 Fit → Stage 3 Transfo
 - Log transforms  
 - Target encoding (smoothed)  
 
----
-
-## 5. Specialized Models
-
-### House-Only Model
- 
-
-### Apartment-Only Model
 
 ---
 
-## 6. Reduced-Feature Model (User friendly inputs)
-
-
----
-
-## 7. Machine Learning Models
+## 5. Machine Learning Models
 
 Implemented:
-- **XGBoost** (primary general model)   R²: 0.86 and MAE: 44510 eur (5 CV)
-- **CatBoost** (GPU‑optimized strong alternative)   R²: 0.85 and MAE: 43703 eur (5 CV)
-- Random Forest (baseline)  R²: 0.83 and MAE: 49437 eur (5 CV)
-- Linear Regression (baseline)   R²: 0.60 and MAE: 90403 eur (5 CV)
+- **XGBoost** (primary general model)   R²: 0.86 and MAE: €44510  (5 CV)
+- **CatBoost** (GPU‑optimized strong alternative)   R²: 0.85 and MAE: €43703 (5 CV)
+- Random Forest (baseline)  R²: 0.83 and MAE: €49437  (5 CV)
+- Linear Regression (baseline)   R²: 0.60 and MAE: €90403 (5 CV)
 
 ### Ensemble
 Weighted average of tuned XGB + tuned CAT  
@@ -133,7 +120,7 @@ Optimized with:
 
 ---
 
-## 8. Kaggle GPU Optimization (Optuna)
+## 6. Kaggle GPU Optimization (Optuna)
 
 A dedicated GPU script performs:
 - Optuna hyperparameter search  
@@ -147,6 +134,30 @@ Models Tuned:
 - CatBoost  
 
 ---
+## 7. Specialized Models
+
+### House-Only Model
+A model trained and optimized for houses
+  - R² : 0.81
+  - MAE : €65k  (5 CV)
+ 
+
+### Apartment-Only Model
+A model trained and optimized for apartments
+  - R² : 0.84 
+  - MAE : €34k  (5 CV)
+
+---
+
+## 8. Reduced-Feature Model
+A reduced-feature model was optimized using 16 user-provided inputs (5 of them boolean) plus 9 additional features computed in the back end, for a total of 25 features. The original model used 73 features.
+
+The reduced-feature model achieved the following performance:
+
+- R²: 0.82 (vs. 0.86 for the full-feature model)
+
+- MAE: €51k (5-fold CV) (vs. €44.5k for the full-feature model)
+
 
 ## 9. How to Run
 ```bash
