@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 
-Immo-Eliza is a **fully modular, leakage-safe machine-learning system** designed to predict real-estate prices in Belgium using enriched geographic, socio‑economic, OSM distance, clustering, and advanced ML features.
+Immo-Eliza is a **fully modular, leakage-safe machine-learning system** designed to predict real-estate prices in Belgium using enriched geographic, socio‑economic, and advanced ML features.
 
 The project includes:
 
